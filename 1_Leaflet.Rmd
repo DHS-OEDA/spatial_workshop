@@ -1,0 +1,368 @@
+---
+title: "Leaflet for R"
+author: "Aaron C Cochran"
+date: "February 20, 2018"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# census_api_key("YOURKEYHERE", install = TRUE)
+library(tidyverse)
+library(plotly) # need development version
+library(leaflet)
+library(viridis) # better colors
+library(rgdal)
+library(tidycensus)
+library(sf)
+
+shp <-
+  readOGR('shapes/tl_2017_41_tract.shp', GDAL1_integer64_policy = TRUE)
+
+```
+
+
+
+
+# Intro
+
+This is a demo of some of the features in the `leaflet` R-package. It is intended to introduce leaflet to you and give you an idea of the range of features. For more information, check out the package author's page here:
+
+https://rstudio.github.io/leaflet/
+
+
+## Setup
+
+The packages being used in this document are outlined below.
+
+```{r, eval = FALSE}
+library(tidyverse)
+library(leaflet) 
+library(viridis) # better colors
+library(rgdal)
+library(sf)
+library(tidycensus) # census API data 
+```
+
+
+# Exploring Leaflet
+
+## Read in data
+
+```{r}
+# Read in shapefile using rgdal package
+shp <-
+  readOGR('shapes/tl_2017_41_tract.shp', GDAL1_integer64_policy = TRUE)
+```
+
+## Create base map
+
+```{r}
+leaflet() %>% 
+  addTiles() # Default is OpenStreetMap
+```
+
+### Provider tiles
+
+List of providers here: <http://leaflet-extras.github.io/leaflet-providers/preview/index.html>
+
+```{r}
+leaflet() %>% addProviderTiles(providers$Esri.NatGeoWorldMap)
+```
+
+### Web Map Service tiles
+
+You can add WMS tiles to Leaflet as well. 
+
+```{r}
+leaflet() %>% addTiles() %>% setView(-93.65, 42.085, zoom = 4) %>% addWMSTiles(
+  "http://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r.cgi",
+  layers = "nexrad-n0r-900913",
+  options = WMSTileOptions(format = "image/png", transparent = TRUE),
+  attribution = "Weather data © 2012 IEM Nexrad"
+)
+```
+
+### Combining tile layers
+
+```{r}
+leaflet() %>% addProviderTiles(providers$MtbMap) %>%
+  addProviderTiles(providers$Stamen.TonerLines,
+    options = providerTileOptions(opacity = 0.35)) %>%
+  addProviderTiles(providers$Stamen.TonerLabels)
+```
+
+
+## Lines and Shapes
+
+```{r}
+pal <- colorQuantile(palette = "viridis",
+                     domain = shp@data$ALAND)
+
+
+leaflet(shp) %>%
+  addPolygons(
+    color = "#444444",
+    weight = 1,
+    smoothFactor = 0.5,
+    opacity = 1,
+    fillOpacity = 0.5,
+    fillColor = ~ pal(shp@data$ALAND),
+    highlightOptions = highlightOptions(
+      color = "white",
+      weight = 2,
+      bringToFront = TRUE
+    )
+  )
+
+```
+
+## `ggplot2` 
+
+The development version of ggplot2 has support for simple features (via the `sf` package). This has made mapping in R much easier and conforms much more to spatial data formats for relational databases. We could spend a lot of time here but as time is limited this section will just introduce ggplot (and a brief intro to `ggplotly()`)
+
+### `ggplot2` map
+
+`ggplot2` has added support for simple features. To test this, we'll need to convert our `sp` object into a `sf` object with the conversion function from the `sf` package, `st_as_sf()`. 
+
+```{r}
+class(shp)
+
+shp_sf <- st_as_sf(shp)
+
+class(shp_sf)
+```
+
+```{r}
+ggplot(shp_sf) + geom_sf()
+```
+
+Why does this help us?
+
+A couple of reasons. First, `sf` objects conform to the principles of `tidy` data that are used throughout the `tidyverse` packages. 
+
+```{r}
+head(shp_sf)
+```
+
+
+```{r, include=TRUE, eval=FALSE}
+
+# not run due to slow loading and many people accessing plotly's api
+p1 <- ggplot(shp_sf, aes(fill=ALAND)) + geom_sf() + scale_fill_viridis(option = "C")
+
+ggplotly(p1, tooltip = "text") %>%
+  highlight(
+    "plotly_hover",
+    opacityDim = 1,
+    selected = attrs_selected(line = list(color = "black"))
+)
+
+```
+
+## Census data
+
+This section is included to show how to pull spatial and census data from the census API with R. It requires you to have your own api key to be able to access the census API. 
+
+```{r}
+# adding in our own data
+
+acs_vars <- load_variables(2015, "acs5", cache = FALSE)
+
+pop <-
+  get_acs(
+    geometry = FALSE,
+    geography = "tract",
+    state = "OR",
+    variables = "B01003_001E"
+  ) # total population
+
+group_quarters <-
+  get_acs(
+    geometry = FALSE,
+    geography = "tract",
+    state = "OR",
+    variables = "B26001_001E"
+  ) # group quarters population
+
+pov_vars <- c("B17001_002E", "B17001_031E")
+
+poverty <-
+  get_acs(
+    geometry = FALSE,
+    geography = "tract",
+    state = "OR",
+    variables = pov_vars
+  )
+
+```
+
+
+
+
+```{r}
+# make a data.frame of our census data
+census_data <-
+  pop %>% mutate(population = estimate) %>% mutate(name = NAME) %>%  select(GEOID, name, population)
+
+group_quarters <-
+  group_quarters %>% select(GEOID, estimate) %>% mutate(groupQuarters_population = estimate) %>% select(-estimate)
+poverty_below <-
+  poverty %>% filter(variable %in% 'B17001_002') %>% mutate(pop_below_fpl = estimate) %>% select(GEOID, pop_below_fpl)
+poverty_above <-
+  poverty %>% filter(variable %in% 'B17001_031') %>% mutate(pop_above_fpl = estimate) %>% select(GEOID, pop_above_fpl)
+
+census_data <- census_data %>% left_join(group_quarters, by = "GEOID")
+census_data <- census_data %>% left_join(poverty_below, by = "GEOID")
+census_data <- census_data %>% left_join(poverty_above, by = "GEOID")
+
+head(census_data)
+```
+
+```{r}
+census_data$GEOID <- as.factor(census_data$GEOID)
+# merge our data into the shapefile we're using with the map
+
+shp_merged <-
+  merge(shp, census_data, by.x = "GEOID", by.y = "GEOID")
+
+shp_merged@data$high_groupQuarters <-
+  factor(
+    ifelse(
+      shp_merged@data$groupQuarters_population / shp_merged@data$population >=
+        .2,
+      "Yes",
+      "No"
+    )
+  )
+shp_merged@data$poverty_percent <-
+  round((
+    shp_merged@data$pop_below_fpl / (
+      shp_merged@data$pop_above_fpl + shp_merged@data$pop_below_fpl
+    )
+  ) * 100, 2)
+```
+
+```{r}
+# new color palettes
+
+pop_pal <-
+  colorNumeric(palette = "Blues", domain = shp_merged@data$population)
+pop_gq_pal <-
+  colorFactor(topo.colors(2), shp_merged@data$high_groupQuarters)
+pov_pal <-
+  colorQuantile(palette = "viridis", shp_merged@data$poverty_percent)
+```
+
+
+```{r}
+leaflet(shp_merged) %>% addProviderTiles(providers$CartoDB.Positron) %>% addPolygons(
+  color = "#444444",
+  weight = 1,
+  smoothFactor = 0.5,
+  opacity = 1,
+  fillOpacity = 0.5,
+  fillColor = ~ pop_pal(shp_merged@data$population),
+  highlightOptions = highlightOptions(
+    color = "white",
+    weight = 2,
+    bringToFront = TRUE
+  ),
+  group = "Population"
+) %>% 
+  addLegend("bottomright", pal = pop_pal, values = ~population, 
+            title = "Population",
+            opacity = 1)
+```
+
+
+ 
+```{r}
+# add in popups
+
+labels <- sprintf(
+  "<strong>%s</strong><br/>%g people",
+  shp_merged@data$name, shp_merged@data$population
+) %>% lapply(htmltools::HTML)
+
+leaflet(shp_merged) %>% addProviderTiles(providers$CartoDB.Positron) %>% 
+  
+  addPolygons(
+  color = "#444444",
+  weight = 1,
+  smoothFactor = 0.5,
+  opacity = 1,
+  fillOpacity = 0.5,
+  fillColor = ~ pop_pal(shp_merged@data$population),
+  highlightOptions = highlightOptions(
+    color = "white",
+    weight = 2,
+    bringToFront = TRUE
+  ),
+  label = labels,
+  labelOptions = labelOptions(
+    style = list("font-weight" = "normal", padding = "3px 8px"), 
+    textsize = "15px", direction = "auto"
+  ),
+  group = "Population"
+) %>% 
+  addLegend("bottomright", pal = pop_pal, values = ~population, 
+            title = "Population",
+            opacity = 1)
+```
+
+
+```{r}
+
+leaflet(shp_merged) %>% addProviderTiles(providers$CartoDB.Positron) %>% addPolygons(
+  color = "#444444",
+  weight = 1,
+  smoothFactor = 0.5,
+  opacity = 1,
+  fillOpacity = 0.5,
+  fillColor = ~ pop_pal(shp_merged@data$population),
+  highlightOptions = highlightOptions(
+    color = "white",
+    weight = 2,
+    bringToFront = TRUE
+  ),
+  label = labels,
+  labelOptions = labelOptions(
+    style = list("font-weight" = "normal", padding = "3px 8px"), 
+    textsize = "15px", direction = "auto"
+  ),
+  group = "Population"
+) %>% 
+  addPolygons(color = "#444444",
+              weight = 1,
+              smoothFactor = 0.5,
+              opacity = 1,
+              fillOpacity = 0.5,
+              fillColor = ~ pop_gq_pal(shp_merged@data$high_groupQuarters),
+              highlightOptions = highlightOptions(
+                color = "white",
+                weight = 2,
+                bringToFront = TRUE
+    
+  ), group="Group Quarters") %>% 
+  addPolygons(color = "#444444",
+              weight = 1,
+              smoothFactor = 0.5,
+              opacity = 1,
+              fillOpacity = 0.5,
+              fillColor = ~ pov_pal(shp_merged@data$poverty_percent),
+              highlightOptions = highlightOptions(
+                color = "white",
+                weight = 2,
+                bringToFront = TRUE
+                
+              ), group="Percent Poverty") %>% 
+  addLayersControl(
+    baseGroups = c("Population", "Group Quarters", "Percent Poverty"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+```
+
