@@ -50,7 +50,7 @@ install.packages("spdep")
 ```
 
 =========================================================
-class: small-code
+
 
 ```{r, eval = FALSE}
 library(leaflet)
@@ -99,13 +99,11 @@ ggplot(tracts) +
 
 =========================================================
 
-```{r, fig.height = 7, fig.width = 7, out.width = "125%", out.height="125%"}
-ggplot(tracts) + geom_sf()
-```
+![](p1.png)
 
 Subset our data
 =========================================================
-class: small-code
+
 
 ```{r}
 mycounties <- c("005", "051", "067") # using FIPS codes for the counties that make up PDX 
@@ -114,9 +112,7 @@ tracts %>% filter(COUNTYFP %in% mycounties) -> pdx
 
 ==========================================================
 
-```{r, echo=FALSE, out.width = "75", out.height = "75%"}
-ggplot(pdx) + geom_sf()
-```
+![](p2.png)
 
 Load into leaflet
 ==========================================================
