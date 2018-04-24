@@ -20,7 +20,7 @@ library(tidycensus)
 library(sf)
 
 shp <-
-  readOGR('shapes/tl_2017_41_tract.shp', GDAL1_integer64_policy = TRUE)
+  readOGR('shapes/tl_2017_41_tract.shp', GDAL1_integer64_policy = TRUE) # read int64 as doubles
 
 ```
 
@@ -56,10 +56,19 @@ library(tidycensus) # census API data
 # Read in shapefile using rgdal package
 shp <-
   readOGR('shapes/tl_2017_41_tract.shp', GDAL1_integer64_policy = TRUE)
+
 ```
 
+> `GDAL1_integer64_policy` is an argument that tells R to read in 64-bit integers as doubles. R has no native ability to handle 64-bit integers. 
 ## Create base map
 
+### Quick detour: The pipeline operator
+
+Part of the `magrittr` package and included in the `tidyverse` collection of R-packages, the pipeline operator (` %>% `) will be used extensively in this workshop. You can think of it as a way of passing the first object to the function on the RHS. For example, `x %>% y` says take `x` and pass it to the function `y(x)`. 
+
+You can learn more here (likely, far more than you'd want to know): http://r4ds.had.co.nz/pipes.html
+
+## Basic Leaflet
 ```{r}
 leaflet() %>% 
   addTiles() # Default is OpenStreetMap
@@ -75,7 +84,7 @@ leaflet() %>% addProviderTiles(providers$Esri.NatGeoWorldMap)
 
 ### Web Map Service tiles
 
-You can add WMS tiles to Leaflet as well. 
+You can add WMS tiles to Leaflet as well.  
 
 ```{r}
 leaflet() %>% addTiles() %>% setView(-93.65, 42.085, zoom = 4) %>% addWMSTiles(
@@ -88,6 +97,8 @@ leaflet() %>% addTiles() %>% setView(-93.65, 42.085, zoom = 4) %>% addWMSTiles(
 
 ### Combining tile layers
 
+You can choose various ways to layer provider tiles on top of each other to get the asthetics you want for your map. In this example, the lines and labels are pulled from other provider tile sets and added to the base map. 
+
 ```{r}
 leaflet() %>% addProviderTiles(providers$MtbMap) %>%
   addProviderTiles(providers$Stamen.TonerLines,
@@ -97,6 +108,8 @@ leaflet() %>% addProviderTiles(providers$MtbMap) %>%
 
 
 ## Lines and Shapes
+
+In this example, we'll create a color palette based on one of the fields in our spatial file, and then add it to the leaflet map as a fill. Additionally, we'll use the `highlightOptions` to give a hover-over effect on the map. 
 
 ```{r}
 pal <- colorQuantile(palette = "viridis",
@@ -122,6 +135,8 @@ leaflet(shp) %>%
 
 ## `ggplot2` 
 
+While this workshop is about `leaflet` in R, some new(ish) features in the development version of ggplot2 are relevant to a spatial analysis workflow and are worth mentioning here. 
+
 The development version of ggplot2 has support for simple features (via the `sf` package). This has made mapping in R much easier and conforms much more to spatial data formats for relational databases. We could spend a lot of time here but as time is limited this section will just introduce ggplot (and a brief intro to `ggplotly()`)
 
 ### `ggplot2` map
@@ -145,13 +160,17 @@ Why does this help us?
 A couple of reasons. First, `sf` objects conform to the principles of `tidy` data that are used throughout the `tidyverse` packages. 
 
 ```{r}
-head(shp_sf)
+head(shp_sf) # head() gives us basic data on the data.frame and includes spatial fields when it is a "sf" object. 
 ```
+
+
 
 
 ```{r, include=TRUE, eval=FALSE}
 
-# not run due to slow loading and many people accessing plotly's api
+# not run due to slow loading on my laptop
+# note: plotly is feature-rich but this is a new feature and will likely be buggy for a while
+
 p1 <- ggplot(shp_sf, aes(fill=ALAND)) + geom_sf() + scale_fill_viridis(option = "C")
 
 ggplotly(p1, tooltip = "text") %>%
@@ -165,12 +184,13 @@ ggplotly(p1, tooltip = "text") %>%
 
 ## Census data
 
-This section is included to show how to pull spatial and census data from the census API with R. It requires you to have your own api key to be able to access the census API. 
+This section is included to show how to pull spatial and census data from the census API with R. It requires you to have your own api key to be able to access the census API. I'll provide a copy of the data for the workshop, and so we'll not give much detail to this section in class. I've kept it in the script for you to check out on your own, if interested. 
 
 ```{r}
 # adding in our own data
 
-acs_vars <- load_variables(2015, "acs5", cache = FALSE)
+# acs_vars <- load_variables(2015, "acs5", cache = FALSE) 
+
 
 pop <-
   get_acs(

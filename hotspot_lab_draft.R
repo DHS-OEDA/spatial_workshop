@@ -5,7 +5,6 @@ install.packages("devtools")
 devtools::install_github("r-lib/rlang", force=TRUE) # do first
 library(rlang) # load the library before installing ggplot2 development version
 devtools::install_github("tidyverse/ggplot2", force=TRUE) # now install this
-
 install.packages("leaflet")
 install.packages("viridis")
 install.packages("tidyverse")
@@ -232,15 +231,15 @@ pdx3@data$LocalG_fdr_category <- ifelse(pdx3@data$LocalG_p_fdr <= .01,
                                                ifelse(pdx3@data$LocalG_p_fdr <=.1 & pdx3@data$LocalG_p_fdr >= .05, "90% Confidence", "Not Significant")))
 
 # High group quarters population tracts
-pdx3@data$high_groupQuarters <-
-  factor(
-    ifelse(
-      pdx3@data$groupQuarters_population / pdx3@data$population >=
-        .2,
-      "Yes",
-      "No"
-    )
-  )
+# pdx3@data$high_groupQuarters <-
+#   factor(
+#     ifelse(
+#       pdx3@data$groupQuarters_population / pdx3@data$population >=
+#         .2,
+#       "Yes",
+#       "No"
+#     )
+#   )
 # create a percent poverty variable from our counts of population and pop below fpl
 pdx3@data$poverty_percent <-
   round((
@@ -254,8 +253,8 @@ pdx3@data$poverty_percent <-
 # Define color palettes based on our data
 pop_pal <-
   colorNumeric(palette = "viridis", domain = pdx3@data$population)
-pop_gq_pal <-
-  colorFactor("Set1", pdx3@data$high_groupQuarters)
+# pop_gq_pal <-
+#   colorFactor("Set1", pdx3@data$high_groupQuarters)
 pov_pal <-
   colorQuantile(palette = "viridis", pdx3@data$poverty_percent)
 localG_pal <- colorFactor(palette = "plasma",
@@ -298,14 +297,14 @@ labels <- sprintf(
   pdx3@data$population
 ) %>% lapply(htmltools::HTML)
 
-labels_gc <- sprintf(
-  "<strong>%s</strong><br/>%g percent of population in group quarters",
-  pdx3@data$name,
-  round(
-    pdx3@data$groupQuarters_population / pdx3@data$population,
-    2
-  ) * 100
-) %>% lapply(htmltools::HTML)
+# labels_gc <- sprintf(
+#   "<strong>%s</strong><br/>%g percent of population in group quarters",
+#   pdx3@data$name,
+#   round(
+#     pdx3@data$groupQuarters_population / pdx3@data$population,
+#     2
+#   ) * 100
+# ) %>% lapply(htmltools::HTML)
 
 labels_pov <- sprintf(
   "<strong>%s</strong><br/>%g percent of population below FPL",
@@ -415,6 +414,13 @@ leaflet(pdx3) %>% addProviderTiles(providers$CartoDB.Positron) %>% addPolygons(
     )
     ,
     group = "Poverty Hotspots"
+  ) %>% addLegend(
+    "bottomright",
+    pal = pop_pal,
+    values = ~ population,
+    title = "Population (ACS 5yr. Estimate, 2015)",
+    opacity = 1,
+    group = "Population"
   ) %>% 
   addLayersControl(
     baseGroups = c("Population",

@@ -1,0 +1,480 @@
+<style>
+body {
+    overflow: scroll;
+}
+</style>
+
+<style>
+.small-code pre code {
+  font-size: 1em;
+}
+</style>
+
+
+Hotspot analysis and mapping in R & Leaflet
+========================================================
+author: Aaron Cochran
+date: 
+autosize: false
+height: 768
+width: 1366
+
+
+```{r setup, include=FALSE}
+library(leaflet)
+library(viridis)
+library(tidyverse)
+library(tidycensus)
+library(sf)
+library(tigris)
+library(spdep)
+```
+
+
+
+Packages
+========================================================
+class: small-code
+
+```{r, eval = FALSE}
+install.packages("devtools")
+devtools::install_github("r-lib/rlang", force=TRUE) # do first
+library(rlang) # load the library before installing ggplot2 development version
+devtools::install_github("tidyverse/ggplot2", force=TRUE) # now install this
+install.packages("leaflet")
+install.packages("viridis")
+install.packages("tidyverse")
+install.packages("sf")
+install.packages("tidycensus")
+install.packages("spdep")
+```
+
+=========================================================
+class: small-code
+
+```{r, eval = FALSE}
+library(leaflet)
+library(viridis)
+library(tidyverse)
+library(tidycensus)
+library(sf)
+library(tigris)
+library(spdep)
+```
+
+Read in our data
+==========================================================
+
+```{r, echo = TRUE, eval = TRUE}
+tracts <- read_sf("data/tl_2017_41_tract.shp")
+census_data <- read_csv('data/census_data.csv')
+```
+
+Examine data
+==========================================================
+class: small-code 
+
+Starting with the tracts object
+```{r}
+head(tracts)
+```
+
+Changing projection
+=========================================================
+
+```{r}
+tracts <- st_transform(tracts, crs = "+proj=longlat +datum=WGS84")
+```
+
+Static maps
+==========================================================
+
+Using `ggplot2` development version gives us the ability to map `sf` objects easily. 
+
+```{r, eval = FALSE}
+ggplot(tracts) + 
+  geom_sf()
+```
+
+
+=========================================================
+
+```{r, fig.height = 7, fig.width = 7, out.width = "125%", out.height="125%"}
+ggplot(tracts) + geom_sf()
+```
+
+Subset our data
+=========================================================
+class: small-code
+
+```{r}
+mycounties <- c("005", "051", "067") # using FIPS codes for the counties that make up PDX 
+tracts %>% filter(COUNTYFP %in% mycounties) -> pdx
+```
+
+==========================================================
+
+```{r, echo=FALSE, out.width = "75", out.height = "75%"}
+ggplot(pdx) + geom_sf()
+```
+
+Load into leaflet
+==========================================================
+
+```{r, echo = TRUE, eval = FALSE}
+leaflet() %>%
+  addPolygons(data=pdx) %>%
+  addTiles()
+```
+
+Adding additional data
+==========================================================
+
+We're going to skip downloading the data directly from the Census API but you can learn all about how to do that here:
+https://walkerke.github.io/tidycensus/articles/spatial-data.html
+
+==========================================================
+class: small-code
+
+```{r}
+head(census_data)
+```
+
+===========================================================
+class: small-code
+
+```{r}
+census_data$county <- substring(as.character(census_data$GEOID), 3, 5) # split the GEOID into substrings starting at position 3, ending at 5 (counties)
+
+# example of what substring does
+mystring <- "ThisIsAString"
+substring(mystring, 2, 8)
+
+
+
+```
+
+
+=============================================================
+class: small-code
+
+```{r}
+census_data <- census_data %>% filter(., county %in% mycounties) # filter for county in mycounties
+unique(census_data$county) # sanity check
+
+```
+
+==============================================================
+class: small-code
+
+```{r}
+# convert our GEOID field in census_data to character instead of numeric
+# to make it match with the GEOID field in pdx
+census_data$GEOID <- as.character(census_data$GEOID)
+
+pdx %>% left_join(census_data, by="GEOID") -> pdx2 # join our data with the sf object 
+```
+
+Quick plot to check our map
+==================================================================
+class: small-code
+```{r}
+ggplot(pdx2, aes(fill=(pop_below_fpl/population))) +
+  geom_sf() +
+  scale_fill_viridis(option="B")
+```
+
+Feature engineering
+==================================================================
+
+```{r}
+# make our proportion variable
+pdx2$poverty_proportion <- pdx2$pop_below_fpl/pdx2$population
+# remove no population area
+pdx2 %>% filter(population !=0, !is.na(population)) -> pdx2
+```
+
+=================================================================
+
+```{r}
+pdx3 <- as(pdx2, "Spatial")
+class(pdx3) # it's a sp object
+```
+
+=================================================================
+class: small-code
+
+```{r}
+shp_nb <- poly2nb(pdx3, queen = T)
+# now assign the spatial weights for the neighbors list
+shp_nb_listw <- nb2listw(shp_nb, style = "W", zero.policy = TRUE)
+
+pdx3@data$LocalG <- localG(x = pdx3@data$poverty_proportion, listw = shp_nb_listw, zero.policy = T)
+```
+
+==================================================================
+class: small-code
+
+This is a quick function to convert z-scores to p-values
+
+```{r}
+convert.z.score<-function(z, one.sided=NULL) {
+  if(is.null(one.sided)) {
+    pval = pnorm(-abs(z));
+    pval = 2 * pval
+  } else if(one.sided=="-") {
+    pval = pnorm(z);
+  } else {
+    pval = pnorm(-z);                                                                                 
+  }
+  return(pval);
+}   
+
+pdx3@data$LocalG_p <- convert.z.score(pdx3@data$LocalG, one.sided = FALSE)
+```
+
+False discovery rate correction
+======================================================================
+
+```{r}
+p.adjust(pdx3@data$LocalG_p, method = "fdr", n=length(pdx3@data$LocalG_p))
+```
+
+Creating categorical variables
+=======================================================================
+class: small-code
+```{r}
+# save the FDR corrected scores here
+pdx3@data$LocalG_p_fdr <- p.adjust(pdx3@data$LocalG_p, method = "fdr", n=length(pdx3@data$LocalG_p))
+# now we create categorical variables for those values
+pdx3@data$LocalG_category <- ifelse(
+  pdx3@data$LocalG_p <= .01,
+  "99% Confidence",
+  ifelse(
+    pdx3@data$LocalG_p <= .05 & pdx3@data$LocalG_p > .01,
+    "95% Confidence",
+    ifelse(
+      pdx3@data$LocalG_p <= .1 & pdx3@data$LocalG_p >= .05,
+      "90% Confidence",
+      "Not Significant"
+    )
+  )
+)
+
+
+```
+
+Creating categorical variables
+=======================================================================
+class: small-code
+
+```{r}
+
+pdx3@data$LocalG_fdr_category <-
+  ifelse(
+    pdx3@data$LocalG_p_fdr <= .01,
+    "99% Confidence",
+    ifelse(
+      pdx3@data$LocalG_p_fdr <= .05 & pdx3@data$LocalG_p_fdr > .01,
+      "95% Confidence",
+      ifelse(
+        pdx3@data$LocalG_p_fdr <= .1 &
+          pdx3@data$LocalG_p_fdr >= .05,
+        "90% Confidence",
+        "Not Significant"
+      )
+    )
+  )
+
+```
+
+Create color palettes
+==========================================================
+
+```{r}
+pop_pal <-
+  colorNumeric(palette = "viridis", domain = pdx3@data$population)
+pov_pal <-
+  colorQuantile(palette = "viridis", pdx3@data$poverty_percent)
+localG_pal <- colorFactor(palette = "plasma",
+                          domain = factor(pdx3@data$LocalG_fdr_category))
+```
+
+Map it in leaflet
+=========================================================
+
+```{r}
+leaflet(pdx3) %>% addProviderTiles(providers$CartoDB.Positron) %>% addPolygons(
+  color = "#444444",
+  weight = 1,
+  smoothFactor = 0.5,
+  opacity = 1,
+  fillOpacity = 0.5,
+  fillColor = ~ pop_pal(pdx3@data$population),
+  highlightOptions = highlightOptions(
+    color = "white",
+    weight = 2,
+    bringToFront = TRUE
+  ),
+  group = "Population"
+) %>%
+  addLegend(
+    "bottomright",
+    pal = pop_pal,
+    values = ~ population,
+    title = "Population (ACS 5yr. Estimate, 2015)",
+    opacity = 1
+  )
+```
+
+
+Labels in leaflet
+=================================================================
+
+```{r}
+labels <- sprintf(
+  "<strong>%s</strong><br/>%g people",
+  pdx3@data$name,
+  pdx3@data$population
+) %>% lapply(htmltools::HTML)
+```
+
+
+=================================================================
+class: small-code
+
+The rest of the labels
+
+```{r}
+labels_pov <- sprintf(
+  "<strong>%s</strong><br/>%g percent of population below FPL",
+  pdx3@data$name,
+  pdx3@data$poverty_percent
+) %>% lapply(htmltools::HTML)
+
+labels_localG <- sprintf(
+  "<strong>%s</strong><br>Poverty hotspot: %s", 
+  pdx3@data$name, 
+  pdx3@data$LocalG_fdr_category
+) %>% lapply(htmltools::HTML)
+```
+
+================================================================
+class: small-code
+
+```{r, eval=FALSE}
+leaflet(pdx3) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolygons(
+    color = "#444444",
+    weight = 1,
+    smoothFactor = 0.5,
+    opacity = 1,
+    fillOpacity = 0.5,
+    fillColor = ~ pop_pal(pdx3@data$population),
+    highlightOptions = highlightOptions(
+      color = "white",
+      weight = 2,
+      bringToFront = TRUE
+    ),
+    label = labels,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto"
+    ),
+    group = "Population"
+  ) %>%
+  addLegend(
+    "bottomright",
+    pal = pop_pal,
+    values = ~ population,
+    title = "Population (ACS 5yr. Estimate, 2015)",
+    opacity = 1
+  )
+```
+
+============================================================
+class: small-code
+
+```{r}
+leaflet(pdx3) %>% addProviderTiles(providers$CartoDB.Positron) %>% addPolygons(
+  color = "#444444",
+  weight = 1,
+  smoothFactor = 0.5,
+  opacity = 1,
+  fillOpacity = 0.5,
+  fillColor = ~ pop_pal(pdx3@data$population),
+  highlightOptions = highlightOptions(
+    color = "white",
+    weight = 2,
+    bringToFront = TRUE
+  ),
+  label = labels,
+  labelOptions = labelOptions(
+    style = list("font-weight" = "normal", padding = "3px 8px"),
+    textsize = "15px",
+    direction = "auto"
+  ),
+  group = "Population"
+) %>%
+  addPolygons(
+    color = "#444444",
+    weight = 1,
+    smoothFactor = 0.5,
+    opacity = 1,
+    fillOpacity = 0.5,
+    fillColor = ~ pov_pal(pdx3@data$poverty_percent),
+    highlightOptions = highlightOptions(
+      color = "white",
+      weight = 2,
+      bringToFront = TRUE
+      
+    ),
+    label = labels_pov,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto"
+    )
+    ,
+    group = "Percent Poverty"
+  ) %>%
+  addPolygons(
+    color = "#444444",
+    weight = 1,
+    smoothFactor = 0.5,
+    opacity = 1,
+    fillOpacity = 0.5,
+    fillColor = ~ localG_pal(pdx3@data$LocalG_fdr_category),
+    highlightOptions = highlightOptions(
+      color = "white",
+      weight = 2,
+      bringToFront = TRUE
+      
+    ),
+    label = labels_localG,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto"
+    )
+    ,
+    group = "Poverty Hotspots"
+  ) %>% addLegend(
+    "bottomright",
+    pal = pop_pal,
+    values = ~ population,
+    title = "Population (ACS 5yr. Estimate, 2015)",
+    opacity = 1,
+    group = "Population"
+  ) %>% 
+  addLayersControl(
+    baseGroups = c("Population",
+                   "Percent Poverty",
+                   "Poverty Hotspots"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+```
+
