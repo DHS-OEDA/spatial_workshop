@@ -38,6 +38,14 @@ install.packages(c("leaflet", "viridis", "sf","sp", "tidyverse", "spdep", "rgdal
 ```
 
 
+About me
+========================================================
+
+Quantitative social scientist
+* Oregon Dept. Human Services - Oregon Enterprise Data Analytics
+* MPP - OSU (2015)
+* BS Applied Science - UW-Stout (2011)
+
 Maps in R
 ========================================================
 

@@ -228,14 +228,15 @@ convert.z.score<-function(z, one.sided=NULL) {
   return(pval);
 }   
 
-pdx3@data$LocalG_p <- convert.z.score(pdx3@data$LocalG, one.sided = FALSE)
 ```
 
+
 False discovery rate correction
-======================================================================
+===================================================================
 
 ```{r}
-p.adjust(pdx3@data$LocalG_p, method = "fdr", n=length(pdx3@data$LocalG_p))
+pdx3@data$LocalG_p <- convert.z.score(pdx3@data$LocalG, one.sided = FALSE)
+
 ```
 
 Creating categorical variables

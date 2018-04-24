@@ -25,9 +25,6 @@ shp <-
 
 ```
 
-
-
-
 # Intro
 
 This is a demo of some of the features in the `leaflet` R-package. It is intended to introduce leaflet to you and give you an idea of the range of features. For more information, check out the package author's page here:
