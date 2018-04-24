@@ -65,6 +65,8 @@ library(spdep)
 Read in our data
 ==========================================================
 
+> Note: This assumes your working directory structure mirrors mine (and it should if you cloned/downloaded the github repo correctly). If you have trouble, ensure that your working directory is the top level folder containing 1_Leaflet.Rmd, ggplot_demo.R, hotspot_slides.Rpres, etc. 
+
 ```{r, echo = TRUE, eval = TRUE}
 tracts <- read_sf("data/tl_2017_41_tract.shp")
 census_data <- read_csv('data/census_data.csv')
@@ -78,6 +80,9 @@ Starting with the tracts object
 ```{r}
 head(tracts)
 ```
+
+More on proj4: http://proj4.org/usage/quickstart.html
+
 
 Changing projection
 =========================================================
@@ -145,9 +150,6 @@ census_data$county <- substring(as.character(census_data$GEOID), 3, 5) # split t
 # example of what substring does
 mystring <- "ThisIsAString"
 substring(mystring, 2, 8)
-
-
-
 ```
 
 
@@ -256,8 +258,6 @@ pdx3@data$LocalG_category <- ifelse(
     )
   )
 )
-
-
 ```
 
 Creating categorical variables
@@ -265,7 +265,6 @@ Creating categorical variables
 class: small-code
 
 ```{r}
-
 pdx3@data$LocalG_fdr_category <-
   ifelse(
     pdx3@data$LocalG_p_fdr <= .01,
@@ -281,7 +280,6 @@ pdx3@data$LocalG_fdr_category <-
       )
     )
   )
-
 ```
 
 Create color palettes
