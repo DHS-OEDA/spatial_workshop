@@ -1,4 +1,12 @@
 # static map demo in R
+
+# this is just a quick demo of the ggplot2 development version's simple features compatibility
+# To run this script you will need a US Census API key available here:
+# https://api.census.gov/data/key_signup.html
+
+# Then call this function to store your key. 
+# tidycensus::census_api_key("MY_KEY_HERE",   install = TRUE, overwrite = TRUE)
+
 library(tidyverse)
 library(tidycensus)
 library(sf)
@@ -7,6 +15,7 @@ library(viridis)
 
 devtools::install_github("tidyverse/ggplot2")
 require(ggplot2)
+
 
 racevars <- c(White = "P0050003", 
               Black = "P0050004", 
