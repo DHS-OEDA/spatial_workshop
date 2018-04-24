@@ -176,11 +176,13 @@ pdx %>% left_join(census_data, by="GEOID") -> pdx2 # join our data with the sf o
 Quick plot to check our map
 ==================================================================
 class: small-code
-```{r}
+```{r, eval=FALSE}
 ggplot(pdx2, aes(fill=(pop_below_fpl/population))) +
   geom_sf() +
   scale_fill_viridis(option="B")
 ```
+
+![](p3.png)
 
 Feature engineering
 ==================================================================
